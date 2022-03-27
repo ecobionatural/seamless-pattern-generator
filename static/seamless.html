@@ -1,0 +1,142 @@
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+
+const side = 550;
+let prj;
+
+const cl = console.log;
+
+function addLayer(f,d)
+{
+    let url = 'layers/'+f;
+
+    let square = [[0,0],[side,0],[0,side],[side,side]];
+    let layer = $('<div />').appendTo('.canvas');
+	mvLayer(layer,d);
+
+	let imgs = [];
+    for(let x=0;x < 3;x++)
+		for(let y=0;y < 3;y++)
+		{
+	   		imgs.push($(`<img src="${url}" style="left:${x*side}px;top:${y*side}px" />`).appendTo(layer));
+		}
+
+	let mstart = null;
+    let handler = $(`<img src="${url}"/>`).appendTo('.list');
+	let listener = handler;
+	for(let im of imgs)
+		listener = listener.add(im);
+
+	listener.on('dragstart drag',e => {
+		e.preventDefault();
+	})
+	.on('mousedown',e=>{
+		mstart = [e.clientX,e.clientY,d[0],d[1]];
+		cl({mstart})
+	})
+	$(window).on('mousemove',e=>{
+		if(!mstart)return;
+		let difx = e.clientX-mstart[0];
+		let dify = e.clientY-mstart[1];
+		cl(difx)
+		d[0] = mstart[2]+difx;
+		d[1] = mstart[3]+dify;
+		mvLayer(layer,d)
+	})
+	.on('mouseup',()=>mstart=null)
+}
+
+function debounce(func, timeout = 300) {
+	let timer;
+	return (...args) => {
+		clearTimeout(timer);
+		timer = setTimeout(() => {
+			func.apply(this, args);
+		}, timeout);
+	};
+}
+
+
+
+function save()
+{
+	localStorage.prj = JSON.stringify(prj);
+}
+
+const save_dbnc = debounce(save)
+
+function mvLayer(layer,d)
+{
+	layer.css({left:d[0]+'px', top:d[1]+'px'});
+	save_dbnc()
+}
+
+window.onload = ()=>{
+
+let hside = side/2;
+$('.viewport').css({left:hside+'px',top:hside+'px',width:side+'px',height:side+'px'})
+
+if(!localStorage.prj)
+{
+	let s = prompt('Enter list of files of "layers" folder.\n(Result of "tree /f" command');
+	let files = s.split(/\n/).map(s => s.trim());
+	prj = {}
+	for(let f of files)
+		prj[f] = [0,0,0];
+	save();
+}
+else prj = JSON.parse(localStorage.prj)
+
+for(let f in prj)
+{
+    addLayer(f,prj[f])
+}
+}
+
+</script>
+
+<style media="screen">
+body{
+    margin: 0;
+	width: 100vw;
+	height: 100vh;
+	display:flex;
+	aligh-items:stretch;
+}
+
+.canvas{
+	width: 80%;
+	background: #111;
+	position: relative;
+	overflow:hidden;
+}
+.canvas *{
+    position: absolute;
+}
+.canvas img{
+	border: 1px solid transparent;
+}
+.canvas img:hover{
+	border: 1px dotted rgba(255,0,0,.5);
+}
+.viewport{
+	border: 1px solid red;
+}
+.list{
+	width: 20%;
+	background: #707;
+}
+.list img{
+    object-fit:contain;
+    width: 100px;height:100px;
+}
+</style>
+
+<body>
+	<div class="canvas">
+        <div class="viewport"></div>
+	</div>
+	<div class="list">
+
+	</div>
+</body>
