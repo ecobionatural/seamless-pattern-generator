@@ -9,7 +9,10 @@ const cl = console.log;
 function save()
 {
 	cl({save:prj})
-	localStorage.prj = JSON.stringify(prj);
+	let s = JSON.stringify(prj);
+	let fixedFloats = s.replace(/(?<=[^\d])(\d\.\d{4})\d+/g,'$1');
+	//cl({fixedFloats})
+	localStorage.prj = fixedFloats;
 }
 
 const save_dbnc = debounce(save)
@@ -21,6 +24,7 @@ function addLayer(f,d)
 
     let square = [[0,0],[side,0],[0,side],[side,side]];
     let layer = $('<div class="layer" />').appendTo('.canvas');
+	layer.toggleClass('hidden',!!d[3]);
 	mvLayer(layer,d);
 
 	let imgs = [];
@@ -31,7 +35,15 @@ function addLayer(f,d)
 		}
 
 	let mstart = null;
-    let handler = $(`<img src="${url}"/>`).appendTo('.list');
+	let handlerItem = $('<div></div>').appendTo('.list');
+	let handler = $(`<img src="${url}"/>`).appendTo(handlerItem);
+	let cbox = $('<input type="checkbox">').appendTo(handlerItem);
+	cbox[0].checked = !d[3];
+	cbox.change(()=>{
+		d[3] = !cbox[0].checked;
+		render();
+	})
+
 	let impack = imgs[0];
 	for(let im of imgs)
 		impack = impack.add(im);
@@ -158,7 +170,7 @@ function showSideDialog()
 function setSide()
 {
 	cl({side:prj.side})
-	let hside = prj.side/2;
+	let hside = prj.side/4;
 	$('.viewport').css({left:hside+'px',top:hside+'px',width:prj.side+'px',height:prj.side+'px'})
 }
 
@@ -238,7 +250,7 @@ body{
 }
 
 .canvas{
-	width: 80%;
+	width: 70%;
 	background: #111;
 	position: relative;
 	overflow:hidden;
@@ -256,11 +268,15 @@ body{
 	border: 1px solid red;
 }
 .panel{
-	width: 20%;
+	width: 30%;
 	background: #707;
 }
 .panel .list{
-
+	display: flex;
+	flex-wrap:wrap;
+}
+.list > div{
+	border: 1px solid #777;
 }
 .list img{
     object-fit:contain;
@@ -283,6 +299,9 @@ body{
 	padding: 20px;
 	background: #fff;
 	border-radius: 10px;
+}
+.hidden{
+	display:none;
 }
 </style>
 
