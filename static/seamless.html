@@ -2,45 +2,58 @@
 <script>
 
 const side = 550;
-let prj;
+let prj = {};
 
 const cl = console.log;
 
+function save()
+{
+	cl({save:prj})
+	localStorage.prj = JSON.stringify(prj);
+}
+
+const save_dbnc = debounce(save)
+
 function addLayer(f,d)
 {
+	let side = prj.side;
     let url = 'layers/'+f;
 
     let square = [[0,0],[side,0],[0,side],[side,side]];
-    let layer = $('<div />').appendTo('.canvas');
+    let layer = $('<div class="layer" />').appendTo('.canvas');
 	mvLayer(layer,d);
 
 	let imgs = [];
     for(let x=0;x < 3;x++)
 		for(let y=0;y < 3;y++)
 		{
-	   		imgs.push($(`<img src="${url}" style="left:${x*side}px;top:${y*side}px" />`).appendTo(layer));
+	   		imgs.push($(`<img src="${url}" style="left:${x*side}px;top:${y*side}px;transform:rotate(${d[2]}deg)" />`).appendTo(layer));
 		}
 
 	let mstart = null;
     let handler = $(`<img src="${url}"/>`).appendTo('.list');
-	let listener = handler;
+	let impack = imgs[0];
 	for(let im of imgs)
-		listener = listener.add(im);
+		impack = impack.add(im);
 
-	listener.on('dragstart drag',e => {
+	handler.add(impack).on('dragstart drag',e => {
 		e.preventDefault();
 	})
 	.on('mousedown',e=>{
-		mstart = [e.clientX,e.clientY,d[0],d[1]];
+		mstart = [e.clientX,e.clientY,d[0]*prj.side,d[1]*prj.side];
 		cl({mstart})
+	})
+	.on('wheel',e=>{
+		e.preventDefault();
+		d[2]+= Math.round(e.originalEvent.deltaY/50);
+		save_dbnc();
+		impack.css({transform:`rotate(${d[2]}deg)`})
 	})
 	$(window).on('mousemove',e=>{
 		if(!mstart)return;
 		let difx = e.clientX-mstart[0];
 		let dify = e.clientY-mstart[1];
-		cl(difx)
-		d[0] = mstart[2]+difx;
-		d[1] = mstart[3]+dify;
+		saveLayerPos(d,[mstart[2]+difx,mstart[3]+dify])
 		mvLayer(layer,d)
 	})
 	.on('mouseup',()=>mstart=null)
@@ -56,41 +69,161 @@ function debounce(func, timeout = 300) {
 	};
 }
 
-
-
-function save()
+function saveLayerPos(d,pos)
 {
-	localStorage.prj = JSON.stringify(prj);
+	for(let n of [0,1])
+	{
+		d[n] = (pos[n]%prj.side)/prj.side;
+	}
 }
-
-const save_dbnc = debounce(save)
 
 function mvLayer(layer,d)
 {
-	layer.css({left:d[0]+'px', top:d[1]+'px'});
+	let pos = [];
+	for(let n of [0,1])
+	{
+		pos[n] = Math.abs(d[n]) <= 1 ? Math.round(d[n]*prj.side) : d[n];
+	}
+	saveLayerPos(d,pos);
+	layer.css({left:pos[0]+'px', top:pos[1]+'px'});
 	save_dbnc()
+}
+
+function showPopup(s)
+{
+	let el = $('<div class=popup><div class=win></div></div>').appendTo('body');
+	el.click(()=>el.remove())
+	$('.win',el)
+	.append(s)
+	.click(ev=>ev.stopPropagation());
+}
+
+function loadFileList(s)
+{
+	let files = s.split(/\n/).map(s => s.trim()).filter(v=>v);
+	if(!files.length)
+		return false;
+	if(!prj.files)prj.files = {}
+	for(let f of files)
+	{
+		if(!prj.files[f])
+			prj.files[f] = [0,0,0];
+	}
+	save();
+	return true;
+}
+
+function showImportFilesDialog()
+{
+	let s = prompt('Enter list of files of "layers" folder.\n(Result of "tree /f" command');
+	if(!loadFileList(s))
+		return;
+	if(!prj.side)
+		showSideDialog();
+}
+
+function showImportDialog()
+{
+	let s = prompt('Enter project JSON');
+	if(!s)return;
+	try{
+		let d = JSON.parse(s);
+		clearPrj();
+		Object.assign(prj,d);
+		cl({prj})
+		render();
+	}catch(e)
+	{
+		alert(e)
+	}
+}
+
+function showSideDialog()
+{
+	let m = '';
+	while(1)
+	{
+		let n = +prompt(m+'Enter square side in px:');
+		if(isNaN(n) || n < 1)
+		{
+			m = 'INCORRECT VALUE!\n';
+			continue;
+		}
+		prj.side = n;
+		break;
+	}
+	render();
+}
+
+function setSide()
+{
+	cl({side:prj.side})
+	let hside = prj.side/2;
+	$('.viewport').css({left:hside+'px',top:hside+'px',width:prj.side+'px',height:prj.side+'px'})
+}
+
+function render()
+{
+	$('.list').html('');
+	$('.canvas .layer').remove();
+	for(let f in prj.files)
+	{
+	    addLayer(f,prj.files[f])
+	}
+	setSide();
+}
+
+function clearPrj()
+{
+	for(let i in prj)
+		delete prj[i];
+}
+
+function initButtons()
+{
+	$('button[name]').each(function(){
+		let name = $(this).attr('name');
+		let actions = {
+			import(){
+				if(localStorage.prj)
+				{
+					if(!confirm('SURE to load new project and KILL UNSAVED?'))
+						return;
+					localStorage['backup_'+Date.now()] = localStorage.prj;
+				}
+				showImportDialog();
+
+			},
+			export(){
+				showPopup(`<code>${localStorage.prj}</code>`);
+			},
+			add(){
+				showImportFilesDialog();
+				render();
+			},
+			side(){
+				showSideDialog();
+			}
+		}
+		//cl({name})
+		$(this).click(()=>actions[name]())
+	})
 }
 
 window.onload = ()=>{
 
-let hside = side/2;
-$('.viewport').css({left:hside+'px',top:hside+'px',width:side+'px',height:side+'px'})
+	initButtons()
 
-if(!localStorage.prj)
-{
-	let s = prompt('Enter list of files of "layers" folder.\n(Result of "tree /f" command');
-	let files = s.split(/\n/).map(s => s.trim());
-	prj = {}
-	for(let f of files)
-		prj[f] = [0,0,0];
-	save();
-}
-else prj = JSON.parse(localStorage.prj)
+	if(!localStorage.prj)
+	{
+		showImportFilesDialog();
+	}
+	else prj = JSON.parse(localStorage.prj)
+	if(!prj.side)
+		showSideDialog();
 
-for(let f in prj)
-{
-    addLayer(f,prj[f])
-}
+	render();
+
 }
 
 </script>
@@ -122,13 +255,34 @@ body{
 .viewport{
 	border: 1px solid red;
 }
-.list{
+.panel{
 	width: 20%;
 	background: #707;
 }
+.panel .list{
+
+}
 .list img{
     object-fit:contain;
-    width: 100px;height:100px;
+    width: 70px;
+	height:70px;
+	margin: 5px;
+}
+.popup{
+	position: fixed;
+	display: flex;
+	align-items:center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	background: rgba(0,0,0,.5);
+}
+.popup .win{
+	padding: 20px;
+	background: #fff;
+	border-radius: 10px;
 }
 </style>
 
@@ -136,7 +290,14 @@ body{
 	<div class="canvas">
         <div class="viewport"></div>
 	</div>
-	<div class="list">
-
+	<div class="panel">
+		<div class=list>
+		</div>
+		<div class=buttons>
+			<button name="import">Import project</button>
+			<button name="export">Export project</button>
+			<button name="add">Add files</button>
+			<button name="side">Set side</button>
+		</div>
 	</div>
 </body>
